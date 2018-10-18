@@ -7,31 +7,18 @@
 //
 
 import UIKit
+import CoreData
 
 class TodoListViewController: UITableViewController {
 
     let defaults = UserDefaults.standard
     var itemArray = [Item]()
+    let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
     override func viewDidLoad() {
         super.viewDidLoad()
-        populateItemArray()
+        loadItems()
     }
     
-    func populateItemArray() {
-        let item = Item()
-        item.tittle = "Find Mike"
-        itemArray.append(item)
-        let itemTwo = Item()
-        itemTwo.tittle = "Buy Eggos"
-        itemArray.append(itemTwo)
-        let itemThree = Item()
-        itemThree.tittle = "Destory Demogorgon"
-        itemArray.append(itemThree)
-        
-        if let items = defaults.array(forKey: "TodoListArray") as? [Item] {
-            itemArray = items
-        }
-    }
     // MARK - TableView Delegate Methods
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         return itemArray.count
@@ -41,16 +28,15 @@ class TodoListViewController: UITableViewController {
         
         let cell = tableView.dequeueReusableCell(withIdentifier: "ToDoITemCell", for: indexPath)
         let item = itemArray[indexPath.row]
-        cell.textLabel?.text = item.tittle
+        cell.textLabel?.text = item.title
         cell.accessoryType = item.selected ? .checkmark : .none
         return cell
     }
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
        
-        print ("Element: \(itemArray[indexPath.row].tittle)")
+        print ("Element: \(itemArray[indexPath.row].title)")
         itemArray[indexPath.row].selected = !itemArray[indexPath.row].selected
-        
-        tableView.reloadData()
+        saveItems()
         tableView.deselectRow(at: indexPath, animated: true)
     }
     
@@ -64,11 +50,11 @@ class TodoListViewController: UITableViewController {
             // what will happen once the user clicks the add Item button on our UIAlert
             print ("Element pressed")
             print (textField.text!)
-            let item = Item()
-            item.tittle = textField.text!
+            let item = Item(context: self.context)
+            item.title = textField.text!
+            item.selected = false
             self.itemArray.append(item)
-            self.defaults.set(self.itemArray, forKey: "TodoListArray")
-            self.tableView.reloadData()
+            self.saveItems()
         }
         
         alert.addTextField { (alertTextField) in
@@ -80,7 +66,50 @@ class TodoListViewController: UITableViewController {
         present(alert, animated: true, completion: nil)
         
     }
+    func saveItems() {
+        do {
+            try context.save()
+        } catch  {
+            print ("Error save items. \(error)")
+        }
+        self.tableView.reloadData()
+
+    }
     
+    func loadItems() {
+        
+        let request : NSFetchRequest<Item> = Item.fetchRequest()
+        fetchRequest (request: request)
+        
+    }
+    
+    func fetchRequest (request: NSFetchRequest<Item>) {
+        do {
+            try itemArray = context.fetch(request)
+        } catch  {
+            print ("Error fetching items. \(error)")
+        }
+        self.tableView.reloadData()
+    }
 
 }
 
+// MARK - Search bar methods
+extension TodoListViewController: UISearchBarDelegate {
+    
+    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+        
+        let request : NSFetchRequest<Item> = Item.fetchRequest()
+        
+        request.predicate = NSPredicate(format: "title CONTAINS[dc] %@", searchBar.text!)
+        
+        request.sortDescriptors = [NSSortDescriptor(key: "title", ascending: true)]
+        
+        fetchRequest(request: request)
+
+        self.tableView.reloadData()
+
+        
+        
+    }
+}
