@@ -7,19 +7,19 @@
 //
 
 import UIKit
-import CoreData
 import SwipeCellKit
+import RealmSwift
 
 class CategoryViewController: UITableViewController {
     
-    var categoryArray = [Category]()
-    
-    let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
+    let realm = try! Realm()
+    // ? to say that is optional
+    var categories: Results<Category>?
     
     override func viewDidLoad() {
         super.viewDidLoad()
         loadCategories()
-        tableView.rowHeight = 80.0
+        tableView.rowHeight = 70.0
 
     }
 
@@ -28,14 +28,15 @@ class CategoryViewController: UITableViewController {
 
     
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return categoryArray.count
+        // ? say it can be nil -> if not nil return count else return 1
+        // ?? in case it is nil
+        return categories?.count ?? 1
     }
     
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         
         let cell = tableView.dequeueReusableCell(withIdentifier: "CategoryCell", for: indexPath) as! SwipeTableViewCell
-        
-        cell.textLabel?.text = categoryArray[indexPath.row].name ?? "No Categories added yet"
+        cell.textLabel?.text = categories?[indexPath.row].name ?? "No Categories Added Yet"
         cell.delegate = self
         return cell
     }
@@ -51,15 +52,17 @@ class CategoryViewController: UITableViewController {
         let destinationVC = segue.destination as! TodoListViewController
         
         if let indexPath = tableView.indexPathForSelectedRow {
-            destinationVC.selectedCategory = categoryArray[indexPath.row]
+            destinationVC.selectedCategory = categories?[indexPath.row]
         }
     }
     
     // MARK - Data Manipulate Methods
     
-    func saveCategories() {
+    func saveCategories(category: Category) {
         do {
-            try context.save()
+            try realm.write {
+                realm.add(category)
+            }
         } catch  {
             print ("Error save items. \(error)")
         }
@@ -68,18 +71,9 @@ class CategoryViewController: UITableViewController {
     }
     
     func loadCategories() {
-        
-        let request : NSFetchRequest<Category> = Category.fetchRequest()
-        fetchRequest (request: request)
-        
-    }
-    
-    func fetchRequest (request: NSFetchRequest<Category>) {
-        do {
-            try categoryArray = context.fetch(request)
-        } catch  {
-            print ("Error fetching items. \(error)")
-        }
+        // fetch all Category objects
+        categories = realm.objects(Category.self)
+        // call all Table View Datasource Methods
         self.tableView.reloadData()
     }
     
@@ -94,10 +88,9 @@ class CategoryViewController: UITableViewController {
             
             // what will happen once the user clicks the add Item button on our UIAlert
             print (textField.text!)
-            let category = Category(context: self.context)
+            let category = Category()
             category.name = textField.text!
-            self.categoryArray.append(category)
-            self.saveCategories()
+            self.saveCategories(category: category)
         }
         
         alert.addTextField { (alertTextField) in
@@ -123,8 +116,15 @@ extension CategoryViewController: SwipeTableViewCellDelegate {
         
         let deleteAction = SwipeAction(style: .destructive, title: "Delete") { action, indexPath in
             // handle action by updating model with deletion
-            print ("Deleted Element")
-            
+            if let categoryToDelete = self.categories?[indexPath.row] {
+                do {
+                    try self.realm.write {
+                        self.realm.delete(categoryToDelete)
+                    }
+                } catch  {
+                    print ("Error saving items. \(error)")
+                }
+            }
             
         }
         
@@ -134,11 +134,11 @@ extension CategoryViewController: SwipeTableViewCellDelegate {
         return [deleteAction]
     }
     
-//    func tableView(_ tableView: UITableView, editActionsOptionsForRowAt indexPath: IndexPath, for orientation: SwipeActionsOrientation) -> SwipeOptions {
-//        var options = SwipeOptions()
-//        options.expansionStyle = .destructive
-//        options.transitionStyle = .border
-//        return options
-//    }
+    func tableView(_ tableView: UITableView, editActionsOptionsForRowAt indexPath: IndexPath, for orientation: SwipeActionsOrientation) -> SwipeOptions {
+        var options = SwipeOptions()
+        options.expansionStyle = .destructive
+        options.transitionStyle = .border
+        return options
+    }
     
 }
